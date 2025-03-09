@@ -202,9 +202,8 @@ function App() {
   const fetchAllHistoricalTasks = () => {
     if (token) {
       console.log("📚 Fetching all historical tasks...");
-      // Clear the cached tasks to start fresh
-      taskStorage.clearTasks();
-      // Use 1 year ago instead of last sync date
+      // Note: We no longer clear the cache to ensure proper merging
+      // Instead, we'll merge with existing tasks in fetchTasksWithLookback
       fetchTasksWithLookback(token, getOneYearAgoISOString());
     }
   };
@@ -220,11 +219,11 @@ function App() {
     if (accessToken === 'demo') {
       console.log("🧪 Using demo mode with mock data");
       setTimeout(() => {
-        const mockTasks = generateMockTasks(15); 
-        console.log("✅ Generated mock tasks:", mockTasks.length, "tasks");
+        const mockTasks = generateMockTasks(50); // Generate more mock tasks for historical view
+        console.log("✅ Generated mock historical tasks:", mockTasks.length, "tasks");
         setTasks(mockTasks);
         setLoading(false);
-      }, 1000); // Simulate API delay
+      }, 1500); // Simulate longer API delay for historical data
       return;
     }
     
@@ -239,14 +238,12 @@ function App() {
         'Accept': 'application/json'
       };
       
-      console.log("📤 Request headers:", JSON.stringify(headers, null, 2).replace(accessToken, "TOKEN_HIDDEN"));
-      
       const userResponse = await fetch(userEndpoint, { headers });
       
       if (!userResponse.ok) {
         const errorText = await userResponse.text();
         console.error("❌ User API error response:", errorText);
-        throw new Error(`Asana API error: ${userResponse.status} - ${errorText}`);
+        throw new Error(`Failed to fetch user data: ${userResponse.status} ${userResponse.statusText}`);
       }
       
       const userData = await userResponse.json();
@@ -261,6 +258,21 @@ function App() {
         console.log("📅 Using completed_since date:", lookbackDate);
         
         try {
+          // Get existing cached tasks (if any)
+          const existingTasks = taskStorage.getTasks();
+          console.log(`📋 Using ${existingTasks.length} existing cached tasks as a baseline`);
+          
+          // Create a map of existing tasks by ID for merging
+          const taskMap = new Map();
+          
+          // Use gid as the task ID (Asana's unique identifier)
+          existingTasks.forEach(task => {
+            const taskId = task.gid;
+            if (taskId) {
+              taskMap.set(taskId, task);
+            }
+          });
+          
           // Fetch all tasks assigned to the current user (required by API)
           const allTasks = await fetchAssignedTasks(accessToken, workspace, userId, lookbackDate);
           
@@ -269,17 +281,41 @@ function App() {
             
             // Debug task IDs to verify they are unique
             const taskIds = new Set();
+            let newTaskCount = 0;
+            let updatedTaskCount = 0;
+            
+            // Merge the tasks with existing ones
             allTasks.forEach(task => {
-              if (taskIds.has(task.gid)) {
-                console.warn(`⚠️ Duplicate task ID found: ${task.gid}`);
+              const taskId = task.gid;
+              if (!taskId) {
+                console.warn("⚠️ Task missing gid:", task);
+                return;
               }
-              taskIds.add(task.gid);
+              
+              if (taskIds.has(taskId)) {
+                console.warn(`⚠️ Duplicate task ID found: ${taskId}`);
+              }
+              taskIds.add(taskId);
+              
+              if (taskMap.has(taskId)) {
+                updatedTaskCount++;
+              } else {
+                newTaskCount++;
+              }
+              
+              taskMap.set(taskId, task);
             });
+            
             console.log(`📊 Found ${taskIds.size} unique task IDs out of ${allTasks.length} tasks`);
+            console.log(`📊 Added ${newTaskCount} new tasks and updated ${updatedTaskCount} existing tasks`);
+            
+            // Convert map back to array
+            const mergedTasks = Array.from(taskMap.values());
+            console.log("🔄 After merging, now have", mergedTasks.length, "total tasks");
             
             // Set and save tasks
-            setTasks(allTasks);
-            taskStorage.saveTasks(allTasks);
+            setTasks(mergedTasks);
+            taskStorage.saveTasks(mergedTasks);
             
             // Save the current date as last sync date
             taskStorage.saveLastSyncDate(new Date().toISOString());
@@ -287,7 +323,13 @@ function App() {
             console.log("🎉 Set and cached tasks successfully with real data");
           } else {
             console.log("⚠️ No completed tasks found");
-            setTasks([]);
+            if (existingTasks.length > 0) {
+              console.log("✅ Keeping existing cached tasks");
+              setTasks(existingTasks);
+            } else {
+              console.log("⚠️ No tasks to display");
+              setTasks([]);
+            }
           }
           setLoading(false);
         } catch (error) {
