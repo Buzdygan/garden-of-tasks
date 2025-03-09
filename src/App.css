@@ -1,0 +1,17 @@
+/* Base styles for the app */
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* Any custom animations can go here */
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Custom classes can go here */
