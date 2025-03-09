@@ -91,11 +91,18 @@ function App() {
   useEffect(() => {
     if (token) {
       // Only fetch tasks if we don't have cached tasks or we're using the demo token
-      if (tasks.length === 0 || token === 'demo') {
+      if ((tasks.length === 0 && !taskStorage.hasCachedTasks()) || token === 'demo') {
         console.log("🔄 Token changed and no cached tasks found, fetching tasks");
         fetchTasksForToken(token);
       } else {
         console.log("🔄 Token changed but using cached tasks");
+        
+        // Make sure we load cached tasks if we have them but state is empty
+        if (tasks.length === 0 && taskStorage.hasCachedTasks()) {
+          const cachedTasks = taskStorage.getTasks();
+          console.log(`📦 Loading ${cachedTasks.length} cached tasks into state`);
+          setTasks(cachedTasks);
+        }
       }
     } else {
       console.log("⚠️ Token state is null or empty");
@@ -202,8 +209,7 @@ function App() {
   const fetchAllHistoricalTasks = () => {
     if (token) {
       console.log("📚 Fetching all historical tasks...");
-      // Note: We no longer clear the cache to ensure proper merging
-      // Instead, we'll merge with existing tasks in fetchTasksWithLookback
+      // Do not clear cached tasks here - we want to merge with them
       fetchTasksWithLookback(token, getOneYearAgoISOString());
     }
   };
@@ -361,9 +367,6 @@ function App() {
       console.log("💾 Saving token to localStorage");
       tokenStorage.saveToken(newToken);
     }
-    
-    // Clear cached tasks when connecting with a new token
-    taskStorage.clearTasks();
   };
   
   // Fetch assigned tasks as a fallback (with proper assignee parameter)
@@ -691,7 +694,9 @@ function App() {
   
   // Function to handle disconnecting from Asana
   const handleDisconnect = () => {
-    // Clear token from storage
+    console.log("🔌 Disconnecting from Asana");
+    
+    // Remove token from localStorage
     tokenStorage.clearToken();
     
     // Clear cached tasks
@@ -702,12 +707,27 @@ function App() {
     setTasks([]);
   };
   
+  // Function to manually refresh recent tasks
+  const handleRefreshTasks = () => {
+    if (token) {
+      console.log("🔄 Manually refreshing recent tasks...");
+      setLoading(true);
+      
+      // Get the last sync date or use 30 days ago if none exists
+      const lastSyncDate = taskStorage.getLastSyncDate() || getThirtyDaysAgoISOString();
+      
+      // Use fetchTasksWithLookback with the last sync date to get only recent tasks
+      fetchTasksWithLookback(token, lastSyncDate);
+    }
+  };
+  
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       <Header 
         token={token} 
         onLogout={handleDisconnect}
         onFetchAllHistory={fetchAllHistoricalTasks}
+        onRefresh={handleRefreshTasks}
       />
       
       <main className="flex-grow">

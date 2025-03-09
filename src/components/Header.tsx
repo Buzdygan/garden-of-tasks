@@ -5,6 +5,7 @@ interface HeaderProps {
   token?: string | null;
   onLogout?: () => void;
   onFetchAllHistory?: () => void;
+  onRefresh?: () => void;
   onDisconnect?: () => void; // Keep for backward compatibility
 }
 
@@ -13,6 +14,7 @@ const Header: React.FC<HeaderProps> = ({
   token,
   onLogout,
   onFetchAllHistory,
+  onRefresh,
   onDisconnect
 }) => {
   // Use onLogout if provided, otherwise fall back to onDisconnect for compatibility
@@ -31,6 +33,14 @@ const Header: React.FC<HeaderProps> = ({
         <nav className="flex items-center">
           {isLoggedIn && (
             <div className="flex mr-4 space-x-3">
+              {onRefresh && (
+                <button
+                  onClick={onRefresh}
+                  className="text-sm text-green-600 hover:text-green-800 flex items-center"
+                >
+                  <span className="mr-1">🔄</span> Refresh Recent Tasks
+                </button>
+              )}
               {onFetchAllHistory && (
                 <button
                   onClick={onFetchAllHistory}

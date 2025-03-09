@@ -21,7 +21,8 @@ const AsanaConnect: React.FC<AsanaConnectProps> = ({ onConnect }) => {
       setToken(savedToken)
       setHasSavedToken(true)
       
-      // Auto-connect if token is present
+      // Auto-connect if token is present, but only if not already connected
+      // This prevents unnecessary reconnections that could clear the task cache
       setTimeout(() => {
         console.log("🔄 Auto-connecting with saved token")
         onConnect(savedToken)
